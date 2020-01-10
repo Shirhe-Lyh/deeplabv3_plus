@@ -147,14 +147,19 @@ def train():
         model_name = 'model-{}-{}.pth'.format(epoch+1, i+1)
         model_path = os.path.join(model_dir, model_name)
         torch.save(deeplab.state_dict(), model_path)
+        ckpt_dict = {'epoch': epoch, 'step': i, 'global_step': step}
+        with open (json_path, 'w') as writer:
+            json.dump(ckpt_dict, writer)
     log.close()
 
     # Final save          
     model_path = os.path.join(model_dir, 'model.pth')
     torch.save(deeplab.state_dict(), model_path)
+    ckpt_dict = {'epoch': num_epochs-1, 'step': total_step-1, 
+                 'global_step': num_epochs * total_step - 1}
+    with open (json_path, 'w') as writer:
+        json.dump(ckpt_dict, writer)
     
     
 if __name__ == '__main__':
     train()
-    
-    
