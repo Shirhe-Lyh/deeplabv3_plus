@@ -66,7 +66,7 @@ def pad(image, offset_height, offset_width, target_height, target_width,
     
     target_height = np.max((target_height, height))
     target_width = np.max((target_width, width))
-    image_pad = PIL.Image.new(image.mode, size=(target_width, target_width), 
+    image_pad = PIL.Image.new(image.mode, size=(target_width, target_height), 
                               color=pad_value)
     offset_height = np.min((offset_height, target_height - height))
     offset_width = np.min((offset_width, target_width - width))
@@ -81,8 +81,8 @@ def random_crop(image, label=None, crop_height=513, crop_width=513):
         raise ValueError('`crop_height` must be not greater than height '
                          'and `crop_width` must be not greater than width.')
         
-    offset_height = np.random.randint(low=0, high=height - crop_height)
-    offset_width = np.random.randint(low=0, high=width - crop_width)
+    offset_height = np.random.randint(low=0, high=height - crop_height + 1)
+    offset_width = np.random.randint(low=0, high=width - crop_width + 1)
     box = (offset_width, offset_height, offset_width + crop_width, 
            offset_height + crop_height)
     image = image.crop(box=box)

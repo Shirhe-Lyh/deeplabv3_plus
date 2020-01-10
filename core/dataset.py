@@ -75,7 +75,7 @@ class SegDataset(torch.utils.data.Dataset):
         # Pad
         image = preprocess_utils.pad(image, 0, 0, self._output_height,
                                      self._output_width, 
-                                     pad_value=(127, 127, 127))
+                                     pad_value=(128, 128, 128))
         mask = preprocess_utils.pad(mask, 0, 0, self._output_height,
                                     self._output_width, pad_value=0)
         # Crop

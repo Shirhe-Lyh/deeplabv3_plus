@@ -31,12 +31,14 @@ _BATCH_NORM_PARAMS = {
 class DeepLab(torch.nn.Module):
     """Implementation of DeepLab V3+."""
     
-    def __init__(self, feature_extractor, model_options):
+    def __init__(self, feature_extractor, model_options, 
+                 fine_tune_batch_norm=False):
         """Constructor.
         
         Args:
             feature_extractor: The backbone of DeepLab model.
             model_options: A ModelOptions instance to configure models.
+            fine_tune_batch_norm: Fine-tune the batch norm parameters or not.
         """
         super(DeepLab, self).__init__()
         self._model_options = model_options
@@ -73,6 +75,9 @@ class DeepLab(torch.nn.Module):
             in_channels=256, out_channels=num_classes,
             kernel_size=model_options.logits_kernel_size)
         
+        if not fine_tune_batch_norm:
+            self._freeze_batch_norm_params()
+        
     def forward(self, x):
         features = self._feature_extractor(x)
         features = self._aspp(features)
@@ -83,6 +88,12 @@ class DeepLab(torch.nn.Module):
         if self._model_options.prediction_with_upsampled_logits:
             logits = resize_bilinear(logits, (height, width))
         return logits
+    
+    def _freeze_batch_norm_params(self):
+        """Freeze the batch norm parameters."""
+        for module in self.modules():
+            if isinstance(module, torch.nn.modules.BatchNorm2d):
+                module.eval()
         
         
 class AtrousSpatialPyramidPooling(torch.nn.Module):
@@ -93,7 +104,7 @@ class AtrousSpatialPyramidPooling(torch.nn.Module):
                  out_channels=256,
                  output_stride=16,
                  crop_size=[513, 513],
-                 atrous_rates=[12, 24, 36], 
+                 atrous_rates=[6, 12, 18], 
                  use_bounded_activation=False,
                  add_image_level_feature=True, 
                  image_pooling_stride=[1, 1],
@@ -363,8 +374,9 @@ def resize_bilinear(images, size):
         images, size, mode='bilinear', align_corners=True)
     
     
-def deeplab(num_classes, crop_size=[513, 513], atrous_rates=[12, 24, 36],
-            output_stride=16, pretrained=True, pretained_num_classes=21,
+def deeplab(num_classes, crop_size=[513, 513], atrous_rates=[6, 12, 18],
+            output_stride=16, fine_tune_batch_norm=False,
+            pretrained=True, pretained_num_classes=21,
             checkpoint_path='./pretrained_models/deeplabv3_pascal_trainval.pth'):
     """DeepLab v3+ for semantic segmentation."""
     outputs_to_num_classes = {'semantic': num_classes}
@@ -375,7 +387,7 @@ def deeplab(num_classes, crop_size=[513, 513], atrous_rates=[12, 24, 36],
     feature_extractor = extractor.feature_extractor(
         model_options.model_variant, pretrained=False,
         output_stride=model_options.output_stride)
-    model = DeepLab(feature_extractor, model_options)
+    model = DeepLab(feature_extractor, model_options, fine_tune_batch_norm)
     
     if pretrained:
         _load_state_dict(model, num_classes, pretained_num_classes,

@@ -104,6 +104,12 @@ parser.add_argument('--use_bounded_activation', default=False, type=bool,
                     'activations better lend themselves to quantized '
                     'inferece.')
 
+# When fine_tune_batch_norm=True, use at least batch size larger than 12
+# (batch size more than 16 is better). Otherwise, one could use smaller batch
+# size and set fine_tune_batch_norm=False.
+parser.add_argument('--fine_tune_batch_norm', default=False, type=bool,
+                    help='Fine tune the batch norm parameters or not.')
+
 
 #----------------------------------------------
 # Arguments for tf_weights_to_pth.py
@@ -157,7 +163,7 @@ parser.add_argument('--num_classes', type=int, default=2,
                     help='Number of classes.')
 parser.add_argument('--batch_size', type=int, default=3,
                     help='Batch size per gpu.')
-parser.add_argument('--lr_decay', type=float, default=0.8,
+parser.add_argument('--lr_decay', type=float, default=0.9,
                     help='The decay rate of learning rate.')
 parser.add_argument('--decay_step', type=int, default=1000,
                     help='Decay learning rate every decay_step.')

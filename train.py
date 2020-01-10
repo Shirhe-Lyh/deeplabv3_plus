@@ -63,6 +63,7 @@ def train():
                             crop_size=crop_size,
                             atrous_rates=FLAGS.atrous_rates,
                             output_stride=FLAGS.output_stride,
+                            fine_tune_batch_norm=FLAGS.fine_tune_batch_norm,
                             pretrained=True,
                             pretained_num_classes=FLAGS.pretained_num_classes,
                             checkpoint_path=FLAGS.checkpoint_path).to(device)
@@ -129,14 +130,14 @@ def train():
                 # Log training images
                 gt_masks = np.expand_dims(masks.cpu().numpy()[:2], axis=1)
                 pred_masks = torch.nn.functional.softmax(
-                    outputs, dim=1).data.cpu().numpy()[:2][:, 1, :, :]
-                pred_masks = np.expand_dims(pred_masks, axis=1)
+                    outputs, dim=1).data.cpu().numpy()[:2][:, 1:, :, :]
+                pred_masks = np.sum(pred_masks, axis=1, keepdims=True)
                 log.add_images('gt_masks', gt_masks, step+1, dataformats='NCHW')
                 log.add_images('pred_masks', pred_masks, step+1,
                                dataformats='NCHW')
                 
             # Decay learning rate
-            if i % 100 == 0:
+            if step % FLAGS.decay_step == 0:
                 lr = config_learning_rate(optimizer, step)
                 log.add_scalar('learning_rate', lr, step+1)
                 
