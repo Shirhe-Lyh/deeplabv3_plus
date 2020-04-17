@@ -83,10 +83,12 @@ def feature_extractor(model_variant, output_stride=8, pretrained=True):
     if model_variant not in networks_map:
         raise ValueError('Unsupported network %s.' % model_variant)
 
+    end_point = networks_to_feature_maps[model_variant][DECODER_END_POINTS][4][0]
     extractor = networks_map[model_variant](num_classes=None,
                                             global_pool=False,
                                             output_stride=output_stride,
-                                            pretrained=pretrained)
+                                            pretrained=pretrained,
+                                            end_point=end_point)
     out_channels = out_channels_map[model_variant]
     extractor.out_channels = out_channels
     return extractor
