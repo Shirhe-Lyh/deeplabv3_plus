@@ -62,7 +62,6 @@ class DeepLab(torch.nn.Module):
         self._refine_decoder = None
         if model_options.decoder_output_stride:
             self._refine_decoder = RefineDecoder(
-                feature_extractor=self._feature_extractor,
                 crop_size=model_options.crop_size,
                 decoder_output_stride=model_options.decoder_output_stride[0],
                 decoder_use_separable_conv=model_options.decoder_use_separable_conv,
@@ -75,14 +74,22 @@ class DeepLab(torch.nn.Module):
             in_channels=256, out_channels=num_classes,
             kernel_size=model_options.logits_kernel_size)
         
+        # Intermediate feature
+        model_variant = model_options.model_variant
+        decoder_output_stride = model_options.decoder_output_stride[0]
+        feature_names = extractor.networks_to_feature_maps[
+            model_variant][extractor.DECODER_END_POINTS][decoder_output_stride]
+        self._feature_name = '{}/{}'.format(model_variant, feature_names[0])
+            
         if not fine_tune_batch_norm:
             self._freeze_batch_norm_params()
-        
+                    
     def forward(self, x):
         features = self._feature_extractor(x)
         features = self._aspp(features)
+        inter_features = self._feature_extractor.end_points()[self._feature_name]
         if self._refine_decoder is not None:
-            features = self._refine_decoder(features)
+            features = self._refine_decoder(features, inter_features)
         logits = self._logits_layer(features)
         _, _, height, width = x.shape
         if self._model_options.prediction_with_upsampled_logits:
@@ -94,6 +101,8 @@ class DeepLab(torch.nn.Module):
         for module in self.modules():
             if isinstance(module, torch.nn.modules.BatchNorm2d):
                 module.eval()
+                module.weight.requires_grad = False
+                module.bias.requires_grad = False
         
         
 class AtrousSpatialPyramidPooling(torch.nn.Module):
@@ -263,13 +272,12 @@ class SplitSeparableConv2d(torch.nn.Module):
 class RefineDecoder(torch.nn.Module):
     """Adds the decoder to obtain sharper segmentation results."""
     
-    def __init__(self, feature_extractor, aspp_channels=256, crop_size=None,
+    def __init__(self, aspp_channels=256, crop_size=None,
                  decoder_output_stride=None, decoder_use_separable_conv=False,
                  model_variant=None, use_bounded_activation=False):
         """Constructor.
         
         Args:
-            feature_extractor: The backbone of the DeepLab model.
             aspp_channels: The out channels of ASPP.
             crop_size: A tuple [crop_height, crop_width] specifying whole
                 patch crop size.
@@ -295,10 +303,6 @@ class RefineDecoder(torch.nn.Module):
         activation_fn = (
             torch.nn.ReLU6(inplace=False) if use_bounded_activation else 
             torch.nn.ReLU(inplace=False))
-        self._extractor = feature_extractor
-        feature_names = extractor.networks_to_feature_maps[
-            model_variant][extractor.DECODER_END_POINTS][decoder_output_stride]
-        self._feature_name = '{}/{}'.format(model_variant, feature_names[0])
         self._decoder = torch.nn.Sequential(
             torch.nn.Conv2d(extractor.feature_out_channels_map[model_variant], 
                             out_channels=48, kernel_size=1, bias=False),
@@ -330,10 +334,9 @@ class RefineDecoder(torch.nn.Module):
                 activation_fn]
         self._concat_layers = torch.nn.Sequential(*concat_layers)
         
-    def forward(self, x):
+    def forward(self, x, features):
         decoder_features_list = [x]
-        inter_feature = self._extractor.end_points()[self._feature_name]
-        decoder_features_list.append(self._decoder(inter_feature))
+        decoder_features_list.append(self._decoder(features))
         # Determine the output size
         decoder_height = scale_dimension(self._crop_size[0],
                                          1.0 / self._output_stride)
