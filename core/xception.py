@@ -227,7 +227,8 @@ class XceptionModule(torch.nn.Module):
     def __init__(self, in_channels, depth_list, skip_connection_type, stride, 
                  unit_rate_list, rate=1, activation_fn_in_separable_conv=False, 
                  regularize_depthwise=False, use_bounded_activation=False,
-                 use_explicit_padding=True, scope='xception_module'):
+                 use_explicit_padding=True, scope='xception_module',
+                 end_point=None):
         """Constructor.
         
         Args:
@@ -252,6 +253,7 @@ class XceptionModule(torch.nn.Module):
                 model fully compatible with the open source version, otherwise
                 use the nattive Pytorch 'SAME' padding.
             scope: Optional variable scope.
+            end_point: The name of intermediate feature map to be stored.
                 
         Raises:
             ValueError: If depth_list and unit_rate_list do not contain three
@@ -320,7 +322,9 @@ class XceptionModule(torch.nn.Module):
             
         # End points
         self._scope = scope
-        self._end_points = None
+        self._end_point = end_point
+        if self._end_point is not None:
+            self._end_points = None
             
     def forward(self, x):
         """
@@ -337,7 +341,8 @@ class XceptionModule(torch.nn.Module):
             residual = layer(residual)
             scope_ = '{}/xception_module/separable_conv{}_pointwise'.format(
                 self._scope, i)
-            self._end_points[scope_] = residual
+            if self._end_point is not None and scope_ == self._end_point:
+                self._end_points[scope_] = residual
         
         if self._skip_connection_type == 'conv':
             shortcut = self._conv_skip_connection(x)
@@ -374,7 +379,7 @@ class StackBlocksDense(torch.nn.Module):
     Control of the output feature density is implemented by atrous convolution.
     """
     
-    def __init__(self, blocks, output_stride=None):
+    def __init__(self, blocks, output_stride=None, end_point=None):
         """Constructor.
         
         Args:
@@ -389,6 +394,7 @@ class StackBlocksDense(torch.nn.Module):
                 example, if the Xception employs units with strides 1, 2, 1,
                 3, 4, 1, then valid values for the output_stride are 1, 2, 6,
                 24 or None (which is equivalent to output_stride=24).
+            end_point: The name of intermediate feature map to be stored.
                 
         Raises:
             ValueError: If the target output_stride is not valid.
@@ -417,10 +423,11 @@ class StackBlocksDense(torch.nn.Module):
                 scope = '{}/unit_{}'.format(block.scope, i + 1)
                 if output_stride is not None and current_stride == output_stride:
                     layers += [block.unit_fn(rate=rate, **dict(unit, stride=1),
-                                             scope=scope)]
+                                             scope=scope, end_point=end_point)]
                     rate *= unit.get('stride', 1)
                 else:
-                    layers += [block.unit_fn(rate=1, **unit, scope=scope)]
+                    layers += [block.unit_fn(rate=1, **unit, scope=scope,
+                                             end_point=end_point)]
                     current_stride *= unit.get('stride', 1)
         
         if output_stride is not None and current_stride != output_stride:
@@ -458,7 +465,8 @@ class Xception(torch.nn.Module):
     """
     
     def __init__(self, blocks, num_classes=None, global_pool=True, 
-                 keep_prob=0.5, output_stride=None, scope=None):
+                 keep_prob=0.5, output_stride=None, scope=None,
+                 end_point=None):
         """Constructor.
         
         Args:
@@ -476,6 +484,7 @@ class Xception(torch.nn.Module):
                 specifies the requested ratio of input to output spatial
                 resolution.
             scope: Optional variable_scope.
+            end_point: The name of intermediate feature map to be stored.
                 
         Raises:
             ValueError: If the target output_stride is not valid.
@@ -494,7 +503,7 @@ class Xception(torch.nn.Module):
                    Conv2dSame(32, 64, 3, stride=1)]
         
         # Extract features for entry_flow, middle_flow, and exit_flow
-        layers += [StackBlocksDense(blocks, output_stride)]
+        layers += [StackBlocksDense(blocks, output_stride, end_point)]
         
         if global_pool:
             # Global average pooling
@@ -579,7 +588,8 @@ def Xception41(num_classes=None,
                output_stride=None,
                regularize_depthwise=False,
                multi_grid=None,
-               scope='xception_41'):
+               scope='xception_41',
+               end_point=None):
     """Xception-41 model."""
     blocks = [
         xception_block('entry_flow/block1',
@@ -634,7 +644,8 @@ def Xception41(num_classes=None,
     ]
     return Xception(blocks=blocks, num_classes=num_classes,
                     global_pool=global_pool, keep_prob=keep_prob,
-                    output_stride=output_stride, scope=scope)
+                    output_stride=output_stride, scope=scope,
+                    end_point=end_point)
     
     
 def xception_41(num_classes=None,
@@ -644,12 +655,13 @@ def xception_41(num_classes=None,
                 regularize_depthwise=False,
                 multi_grid=None,
                 scope='xception_41',
+                end_point=None,
                 pretrained=True,
                 checkpoint_path='./pretrained_models/xception_41.pth'):
     """Xception-41 model."""
     xception = Xception41(num_classes=num_classes, global_pool=global_pool, 
                           keep_prob=keep_prob, output_stride=output_stride,
-                          scope=scope)
+                          scope=scope, end_point=end_point)
     if pretrained:
         _load_state_dict(xception, num_classes, checkpoint_path)
     return xception
@@ -661,7 +673,8 @@ def Xception65(num_classes=None,
                output_stride=None,
                regularize_depthwise=False,
                multi_grid=None,
-               scope='xception_65'):
+               scope='xception_65',
+               end_point=None):
     """Xception-65 model."""
     blocks = [
         xception_block('entry_flow/block1',
@@ -716,7 +729,8 @@ def Xception65(num_classes=None,
     ]
     return Xception(blocks=blocks, num_classes=num_classes,
                     global_pool=global_pool, keep_prob=keep_prob,
-                    output_stride=output_stride, scope=scope)
+                    output_stride=output_stride, scope=scope,
+                    end_point=end_point)
 
 
 def xception_65(num_classes=None,
@@ -726,12 +740,13 @@ def xception_65(num_classes=None,
                 regularize_depthwise=False,
                 multi_grid=None,
                 scope='xception_65',
+                end_point=None,
                 pretrained=True,
                 checkpoint_path='./pretrained_models/xception_65.pth'):
     """Xception-65 model."""
     xception = Xception65(num_classes=num_classes, global_pool=global_pool, 
                           keep_prob=keep_prob, output_stride=output_stride,
-                          scope=scope)
+                          scope=scope, end_point=end_point)
     if pretrained:
         _load_state_dict(xception, num_classes, checkpoint_path)
     return xception
@@ -743,7 +758,8 @@ def Xception71(num_classes=None,
                output_stride=None,
                regularize_depthwise=False,
                multi_grid=None,
-               scope='xception_71'):
+               scope='xception_71',
+               end_point=None):
     """Xception-71 model."""
     blocks = [
         xception_block('entry_flow/block1',
@@ -814,7 +830,8 @@ def Xception71(num_classes=None,
     ]
     return Xception(blocks=blocks, num_classes=num_classes,
                     global_pool=global_pool, keep_prob=keep_prob,
-                    output_stride=output_stride, scope=scope)
+                    output_stride=output_stride, scope=scope,
+                    end_point=end_point)
 
 
 def xception_71(num_classes=None,
@@ -824,12 +841,13 @@ def xception_71(num_classes=None,
                 regularize_depthwise=False,
                 multi_grid=None,
                 scope='xception_71',
+                end_point=None,
                 pretrained=True,
                 checkpoint_path='./pretrained_models/xception_71.pth'):
     """Xception-71 model."""
     xception = Xception71(num_classes=num_classes, global_pool=global_pool, 
                           keep_prob=keep_prob, output_stride=output_stride,
-                          scope=scope)
+                          scope=scope, end_point=end_point)
     if pretrained:
         _load_state_dict(xception, num_classes, checkpoint_path)
     return xception
